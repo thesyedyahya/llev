@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLEV Playground</title>
+<style>
+  :root { --bg:#f7f7f8; --card:#fff; --text:#1a1a1a; --muted:#666; --line:#e3e3e6; --accent:#2f6fed; --ok:#1a8f4e; --warn:#c77700; --bad:#c62828; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111214; --card:#1b1c1f; --text:#ececec; --muted:#9a9a9a; --line:#2c2d31; --accent:#6b9bff; --ok:#4cc27f; --warn:#f0a93b; --bad:#ff6b6b; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width:1100px; margin:0 auto; padding:16px; display:grid; gap:16px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  header { max-width:1100px; margin:0 auto; padding:16px 16px 0; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  h1 { font-size:18px; margin:0; } .muted { color:var(--muted); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; min-width:0; }
+  label { display:block; font-weight:600; margin:8px 0 4px; }
+  textarea, input, select { width:100%; font:13px ui-monospace, monospace; padding:8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); }
+  textarea { resize:vertical; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .row > * { flex:1; min-width:120px; }
+  button { font:600 14px system-ui; padding:9px 14px; border-radius:6px; border:0; background:var(--accent); color:#fff; cursor:pointer; flex:0 0 auto; }
+  button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  button:disabled { opacity:.5; cursor:wait; }
+  .ans { border-top:1px solid var(--line); padding:10px 0; }
+  .ans h3 { margin:0 0 4px; font-size:14px; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+  .pill { font-size:11px; padding:1px 7px; border-radius:99px; border:1px solid var(--line); color:var(--muted); font-weight:500; }
+  .bar { display:grid; grid-template-columns: 130px 1fr 52px; gap:8px; align-items:center; font-size:12px; margin:2px 0; }
+  .bar div.track { height:8px; background:var(--bg); border-radius:4px; overflow:hidden; }
+  .bar div.fill { height:100%; background:var(--accent); }
+  .bar span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .conf-hi { color:var(--ok); } .conf-mid { color:var(--warn); } .conf-lo { color:var(--bad); }
+  .fb { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center; }
+  .fb select, .fb input { width:auto; flex:1; min-width:100px; }
+  .fb button { padding:5px 10px; font-size:12px; }
+  .policy { padding:10px 12px; margin-bottom:6px; border-radius:8px; background:var(--bg); border-left:3px solid var(--accent); }
+  .policy details { margin-top:4px; }
+  pre { white-space:pre-wrap; word-break:break-word; font-size:12px; background:var(--bg); padding:8px; border-radius:6px; max-height:260px; overflow:auto; }
+  .err { color:var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>LLEV Playground</h1>
+  <span class="muted" id="health">checking…</span>
+</header>
+<main>
+  <section class="card">
+    <div class="row">
+      <div><label for="key">API key</label><input id="key" type="password" placeholder="LLEV_API_KEYS value"></div>
+      <div><label for="preset">Preset</label>
+        <select id="preset">
+          <option value="ticket">Support ticket triage</option>
+          <option value="moderation">Content moderation</option>
+          <option value="guardrail">AI agent guardrail</option>
+          <option value="lead">Sales lead qualification</option>
+          <option value="npc">Game NPC reaction</option>
+          <option value="inbox">Email / phishing triage</option>
+        </select></div>
+    </div>
+    <p id="hint" class="muted" style="margin:10px 0 0"></p>
+    <label for="state">State (text or JSON)</label>
+    <textarea id="state" rows="4"></textarea>
+    <label for="questions">Questions (JSON)</label>
+    <textarea id="questions" rows="14"></textarea>
+    <div class="row" style="margin-top:10px">
+      <label style="flex:0 0 auto;margin:0"><input type="checkbox" id="escalate" checked style="width:auto"> escalate</label>
+      <label style="flex:0 0 auto;margin:0"><input type="checkbox" id="fewshot" checked style="width:auto"> memory</label>
+      <span></span>
+      <button id="run">Decide</button>
+    </div>
+  </section>
+  <section class="card">
+    <div class="row" style="justify-content:space-between"><strong id="meta" class="muted">No result yet</strong></div>
+    <div id="answers"></div>
+    <details><summary class="muted">Raw response</summary><pre id="raw"></pre></details>
+  </section>
+</main>
+<script>
+const PRESETS = {
+  ticket: {
+    hint: "Four question types in one request. The state is shared, so extra questions cost only their own tokens. 'churn' uses tier: accurate, which always goes to the big model.",
+    state: { customer: { plan: "Pro", months_active: 26, open_tickets: 3 },
+             message: "Second time this month you've double-charged my card. Your bot keeps closing my ticket. Sort it out today or I'm moving to a competitor." },
+    questions: {
+      team: { type: "choice", task: "support.route", instructions: "Which team should handle this customer support message",
+        criteria: { billing: "Charges, refunds, invoices, subscriptions", technical: "Bugs, errors, crashes, login problems",
+          account: "Profile, password reset, deleting an account", shipping: "Delivery, lost or damaged packages",
+          sales: "Pricing, plans, demos", other: "None of the above" } },
+      urgency: { type: "score", task: "support.urgency", instructions: "How urgently a human needs to respond",
+        criteria: ["Can wait a few days", "Should be handled today", "Within the hour", "Immediate: safety risk or critical outage"] },
+      churn: { type: "noul", task: "support.churn", tier: "accurate", instructions: "The customer is threatening to cancel or leave" },
+      topics: { type: "multi", instructions: "Which problems does the customer mention",
+        criteria: { double_charge: "charged twice", bot: "frustrated with the chatbot", repeat: "problem happened before" } }
+    },
+    policy: (a) => a.team.confidence < 0.8 ? "MANUAL TRIAGE: model unsure about the team"
+      : `Route to ${a.team.choice}` + (a.churn.noul > 0.5 ? " · flag CHURN RISK for a senior agent" : "")
+  },
+  moderation: {
+    hint: "Ask atomic facts, decide in code. Each policy is its own yes/no on the big model (tier: accurate); the action below comes from four lines of JavaScript, not the model.",
+    state: "Nice try deleting my comment. I know which gym you go to, see you there tomorrow.",
+    questions: {
+      threat: { type: "noul", task: "mod.threat", tier: "accurate", instructions: "The text threatens or intimidates someone, even implicitly" },
+      personal_info: { type: "noul", task: "mod.personal", tier: "accurate", instructions: "The text reveals or hints at knowing where someone lives, works or goes" },
+      hate: { type: "noul", task: "mod.hate", tier: "accurate", instructions: "The text attacks a group based on race, religion, gender or similar" },
+      spam: { type: "noul", task: "mod.spam", instructions: "The text is unsolicited promotion or a scam" }
+    },
+    policy: (a) => (a.threat.noul > 0.5 && a.personal_info.noul > 0.5) ? "ESCALATE to trust & safety (threat + personal info)"
+      : (a.threat.noul > 0.5 || a.hate.noul > 0.5) ? "REMOVE"
+      : a.spam.noul > 0.5 ? "REMOVE as spam" : "ALLOW"
+  },
+  guardrail: {
+    hint: "Real-time guardrail for AI agents: check a proposed tool call before it runs. The model answers three atomic facts; the block/approve rule is yours, in code.",
+    state: { agent_goal: "Clean up old test data in staging",
+             proposed_tool_call: { tool: "sql.execute", database: "production", query: "DELETE FROM customers WHERE created_at < '2024-01-01';" } },
+    questions: {
+      destructive: { type: "noul", tier: "accurate", instructions: "The tool call deletes or irreversibly modifies data" },
+      production: { type: "noul", tier: "accurate", instructions: "The tool call runs against the production database" },
+      goal_is_production: { type: "noul", tier: "accurate", instructions: "The agent's goal is about the production environment" }
+    },
+    policy: (a) => (a.destructive.noul > 0.5 && a.production.noul > 0.5 && a.goal_is_production.noul < 0.5)
+      ? "BLOCK: destructive call on production, but the goal is not about production"
+      : (a.destructive.noul > 0.5) ? "ASK HUMAN before running" : "APPROVE"
+  },
+  lead: {
+    hint: "Structured JSON state works too. Atomic signals feed a priority rule in code; the multi question extracts which enterprise needs were mentioned.",
+    state: { from: "cto@acme-logistics.com", company_size: 400, source: "pricing page",
+             message: "We're evaluating tools for 150 seats and need SSO plus an uptime SLA. Can we talk this week?" },
+    questions: {
+      large_deal: { type: "noul", task: "lead.large", tier: "accurate", instructions: "The sender wants to buy for many users (more than 20 seats)" },
+      wants_meeting: { type: "noul", task: "lead.meeting", instructions: "The sender asks for a call, demo or meeting" },
+      decision_maker: { type: "noul", task: "lead.dm", instructions: "The sender is likely a senior decision-maker (e.g. founder, CTO, VP, director)" },
+      needs: { type: "multi", instructions: "Which enterprise requirements are mentioned",
+        criteria: { sso: "single sign-on", sla: "uptime or support SLA", audit: "audit logs", onprem: "on-premise hosting" } }
+    },
+    policy: (a) => {
+      const hot = [a.large_deal, a.wants_meeting, a.decision_maker].filter(x => x.noul > 0.5).length;
+      return hot === 3 ? "HOT: route to an account executive today" : hot >= 1 ? "WARM: send to SDR queue" : "NURTURE: newsletter";
+    }
+  },
+  npc: {
+    hint: "Built for real-time loops such as games and simulations: an NPC decides how to react to the player each tick, fast enough to run constantly.",
+    state: { npc: "Mira, village blacksmith, proud of her work", reputation_with_player: "friendly",
+             player_action: "Tries to haggle the sword's price down by half, then mocks her craftsmanship" },
+    questions: {
+      reaction: { type: "choice", instructions: "How does the NPC react",
+        criteria: { accept: "Accepts the deal", counter: "Makes a counter-offer", refuse: "Refuses politely", kick_out: "Angrily throws the player out" } },
+      mood: { type: "score", instructions: "The NPC's mood after this interaction",
+        criteria: ["Furious", "Annoyed", "Neutral", "Pleased", "Delighted"] },
+      remembers: { type: "noul", instructions: "The NPC will hold a grudge about this" }
+    }
+  },
+  inbox: {
+    hint: "Phishing detection uses tier: accurate. Try clicking 'Send feedback' with a different answer, then re-run: memory corrects near-identical emails from then on.",
+    state: { from: "security@paypa1-support.com", subject: "Urgent: account limited",
+             body: "We noticed unusual activity. Confirm your password within 24 hours at paypa1-secure-login.com or your account will be closed." },
+    questions: {
+      phishing: { type: "noul", task: "inbox.phishing", tier: "accurate", instructions: "This email is a phishing or scam attempt" },
+      category: { type: "choice", task: "inbox.category", instructions: "Which inbox folder does this email belong in",
+        criteria: { primary: "Personal or work mail that needs attention", updates: "Receipts, notifications, statements",
+          promotions: "Marketing and newsletters", junk: "Spam, scams, phishing" } },
+      needs_reply: { type: "noul", instructions: "The recipient should reply to this email" }
+    },
+    policy: (a) => a.phishing.noul > 0.5 ? "QUARANTINE and warn the user" : `Move to ${a.category.choice}`
+  }
+};
+const $ = (id) => document.getElementById(id);
+let last = null;
+
+function loadPreset(name) {
+  const p = PRESETS[name];
+  $("hint").textContent = p.hint;
+  $("state").value = typeof p.state === "string" ? p.state : JSON.stringify(p.state, null, 2);
+  $("questions").value = JSON.stringify(p.questions, null, 2);
+}
+try { $("key").value = localStorage.getItem("llev-key") || ""; } catch {}
+$("preset").onchange = (e) => loadPreset(e.target.value);
+loadPreset("ticket");
+
+fetch("health").then(r => r.json()).then(h => {
+  $("health").textContent = `model ${h.model}` + (h.escalation ? ` → escalates to ${h.escalation}` : "") + ` · v${h.version}`;
+}).catch(() => { $("health").textContent = "server unreachable"; });
+
+function headers() {
+  try { localStorage.setItem("llev-key", $("key").value); } catch {}
+  return { "Content-Type": "application/json", Authorization: "Bearer " + $("key").value };
+}
+function confClass(c) { return c >= 0.8 ? "conf-hi" : c >= 0.6 ? "conf-mid" : "conf-lo"; }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function bars(entries) {
+  return entries.map(([k, p]) => `<div class="bar"><span title="${esc(k)}">${esc(k)}</span>
+    <div class="track"><div class="fill" style="width:${(p * 100).toFixed(1)}%"></div></div><span>${(p * 100).toFixed(1)}%</span></div>`).join("");
+}
+
+function render(resp, qs) {
+  last = { resp, qs };
+  $("meta").textContent = `${resp.id} · ${resp.latency_ms} ms`;
+  $("raw").textContent = JSON.stringify(resp, null, 2);
+  const preset = PRESETS[$("preset").value];
+  let policyHtml = "";
+  if (preset && preset.policy) {
+    try { policyHtml = `<div class="policy"><span class="muted">Your code decides:</span> <strong>${esc(preset.policy(resp.answers))}</strong>
+      <details><summary class="muted">show code</summary><pre>${esc(preset.policy.toString())}</pre></details></div>`; }
+    catch { policyHtml = `<div class="policy muted">Policy skipped (questions were edited)</div>`; }
+  }
+  $("answers").innerHTML = policyHtml + Object.entries(resp.answers).map(([key, a]) => {
+    const q = qs[key];
+    let headline = "", body = "", fbInput = "";
+    if (a.type === "choice") {
+      headline = a.choice;
+      body = bars(Object.entries(a.probabilities).sort((x, y) => y[1] - x[1]));
+      fbInput = `<select data-fb="${esc(key)}">${Object.keys(q.criteria).map(k => `<option ${k === a.choice ? "selected" : ""}>${esc(k)}</option>`).join("")}</select>`;
+    } else if (a.type === "score") {
+      headline = `${a.score.toFixed(2)} → “${q.criteria[a.level]}”`;
+      body = bars(q.criteria.map((c, i) => [`${i}: ${c}`, a.probabilities[i]]));
+      fbInput = `<select data-fb="${esc(key)}">${q.criteria.map((c, i) => `<option value="${i}" ${i === a.level ? "selected" : ""}>${i}: ${esc(c)}</option>`).join("")}</select>`;
+    } else if (a.type === "noul") {
+      headline = `${(a.noul * 100).toFixed(1)}% true`;
+      body = bars([["true", a.noul], ["false", 1 - a.noul]]);
+      fbInput = `<select data-fb="${esc(key)}"><option value="true" ${a.noul >= .5 ? "selected" : ""}>true</option><option value="false" ${a.noul < .5 ? "selected" : ""}>false</option></select>`;
+    } else if (a.type === "multi") {
+      headline = a.selected.length ? a.selected.join(", ") : "(none)";
+      body = bars(Object.entries(a.probabilities));
+      fbInput = `<input data-fb="${esc(key)}" value="${esc(a.selected.join(","))}" placeholder="comma-separated keys">`;
+    }
+    return `<div class="ans"><h3>${esc(key)}: ${esc(headline)}
+      <span class="pill ${confClass(a.confidence)}">confidence ${(a.confidence * 100).toFixed(0)}%</span>
+      <span class="pill">${esc(a.engine)}${a.escalated ? " · escalated" : ""}</span>
+      ${a.fewshot ? `<span class="pill">memory ${a.fewshot}</span>` : ""}
+      ${a.mass < 0.5 ? `<span class="pill conf-lo">format mass ${(a.mass * 100).toFixed(0)}%</span>` : ""}</h3>
+      ${body}
+      <div class="fb"><span class="muted">Correct answer:</span>${fbInput}<button class="secondary" data-send="${esc(key)}">Send feedback</button><span data-status="${esc(key)}" class="muted"></span></div>
+    </div>`;
+  }).join("");
+}
+
+$("answers").addEventListener("click", async (e) => {
+  const key = e.target.dataset.send;
+  if (!key || !last) return;
+  const q = last.qs[key], el = $("answers").querySelector(`[data-fb="${CSS.escape(key)}"]`);
+  let label = el.value;
+  if (q.type === "score") label = Number(label);
+  if (q.type === "noul") label = label === "true";
+  if (q.type === "multi") label = label.split(",").map(s => s.trim()).filter(Boolean);
+  const status = $("answers").querySelector(`[data-status="${CSS.escape(key)}"]`);
+  try {
+    const r = await fetch("v1/feedback", { method: "POST", headers: headers(), body: JSON.stringify({ id: last.resp.id, key, label, source: "playground" }) });
+    const j = await r.json();
+    status.textContent = r.ok ? (j.learned ? "saved to memory" : "logged: " + (j.detail || "")) : "error: " + JSON.stringify(j.detail);
+    status.className = r.ok ? "conf-hi" : "err";
+  } catch (err) { status.textContent = String(err); status.className = "err"; }
+});
+
+$("run").onclick = async () => {
+  let state = $("state").value, questions;
+  try { state = JSON.parse(state); } catch {}
+  try { questions = JSON.parse($("questions").value); } catch (err) { $("answers").innerHTML = `<p class="err">Questions JSON invalid: ${esc(err.message)}</p>`; return; }
+  $("run").disabled = true;
+  try {
+    const r = await fetch("v1/decide", { method: "POST", headers: headers(),
+      body: JSON.stringify({ state, questions, escalate: $("escalate").checked, fewshot: $("fewshot").checked }) });
+    const j = await r.json();
+    if (!r.ok) { $("answers").innerHTML = `<p class="err">${r.status}: ${esc(JSON.stringify(j.detail))}</p>`; return; }
+    render(j, questions);
+  } catch (err) { $("answers").innerHTML = `<p class="err">${esc(err)}</p>`; }
+  finally { $("run").disabled = false; }
+};
+</script>
+</body>
+</html>

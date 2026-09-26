@@ -1,0 +1,21 @@
+services:
+  llev:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      LLEV_MODELS_DIR: /models
+      LLEV_DATA_DIR: /data
+    volumes:
+      - llev-models:/models
+      - llev-data:/data
+    ports:
+      - "8088:8088"
+    deploy:
+      resources:
+        limits:
+          memory: 6g
+
+volumes:
+  llev-models:
+  llev-data:

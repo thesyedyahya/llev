@@ -1,0 +1,114 @@
+{
+  "description": "General English decision tasks for comparing models. Labels are hand-written; extend with your own domain data.",
+  "questions": {
+    "support_route": {
+      "type": "choice",
+      "instructions": "Which team should handle this customer support message",
+      "criteria": {
+        "billing": "Charges, refunds, invoices, subscriptions, payment failures",
+        "technical": "Bugs, errors, crashes, login or integration problems",
+        "account": "Profile changes, password reset, deleting or transferring an account",
+        "shipping": "Delivery status, delays, lost or damaged packages, returns",
+        "sales": "Pricing questions, plans, demos, buying more seats",
+        "other": "None of the above"
+      }
+    },
+    "urgency": {
+      "type": "score",
+      "instructions": "How urgently a human needs to respond to this message",
+      "criteria": [
+        "Can wait a few days",
+        "Should be handled today",
+        "Needs a response within the hour",
+        "Immediate: safety risk or critical outage"
+      ]
+    },
+    "sentiment": {
+      "type": "score",
+      "instructions": "What is the writer's overall sentiment",
+      "criteria": ["Very negative", "Negative", "Neutral", "Positive", "Very positive"]
+    },
+    "toxic": {
+      "type": "noul",
+      "instructions": "The text contains insults, slurs, harassment or threats aimed at a person"
+    },
+    "spam": {
+      "type": "noul",
+      "instructions": "The text is unsolicited promotion, a scam or a phishing attempt"
+    },
+    "intent": {
+      "type": "choice",
+      "instructions": "What does the user want the assistant to do",
+      "criteria": {
+        "question": "Answer a factual or how-to question",
+        "task": "Perform an action such as booking, sending or creating something",
+        "complaint": "Register a complaint or report a problem",
+        "chitchat": "Casual conversation with no real request",
+        "cancel": "Cancel, unsubscribe or stop something"
+      }
+    }
+  },
+  "cases": [
+    {"q": "support_route", "state": "I was charged twice for my subscription this month, please refund one of them.", "expected": "billing"},
+    {"q": "support_route", "state": "The app crashes every time I try to upload a photo on my Android phone.", "expected": "technical"},
+    {"q": "support_route", "state": "How do I change the email address on my profile?", "expected": "account"},
+    {"q": "support_route", "state": "My package was supposed to arrive on Monday and it's still not here.", "expected": "shipping"},
+    {"q": "support_route", "state": "Do you offer a discount for teams of more than 50 people?", "expected": "sales"},
+    {"q": "support_route", "state": "I keep getting a 500 error when calling your API with a valid token.", "expected": "technical"},
+    {"q": "support_route", "state": "Please delete my account and all my data.", "expected": "account"},
+    {"q": "support_route", "state": "The box arrived crushed and the glass inside is broken.", "expected": "shipping"},
+    {"q": "support_route", "state": "My card was declined but I have plenty of funds.", "expected": "billing"},
+    {"q": "support_route", "state": "Can I get a demo of the enterprise plan next week?", "expected": "sales"},
+    {"q": "support_route", "state": "What's your office address? I want to send a thank-you card.", "expected": "other"},
+    {"q": "support_route", "state": "I forgot my password and the reset email never arrives.", "expected": "account"},
+    {"q": "support_route", "state": "Where can I download last year's invoices for my accountant?", "expected": "billing"},
+    {"q": "support_route", "state": "Single sign-on with our Okta tenant stopped working after your update.", "expected": "technical"},
+
+    {"q": "urgency", "state": "Would be nice if you added a dark mode at some point.", "expected": 0},
+    {"q": "urgency", "state": "I was billed the wrong amount today, can you check?", "expected": 1},
+    {"q": "urgency", "state": "Our whole checkout is down and customers can't pay. We're losing sales every minute.", "expected": 3},
+    {"q": "urgency", "state": "There's a typo on your pricing page.", "expected": 0},
+    {"q": "urgency", "state": "I need the signed contract back before my board meeting in two hours.", "expected": 2},
+    {"q": "urgency", "state": "The delivery driver is threatening me at my door right now.", "expected": 3},
+    {"q": "urgency", "state": "Can you send me a copy of last month's receipt when you get a chance?", "expected": 0},
+    {"q": "urgency", "state": "My order hasn't shipped yet and it was due today.", "expected": 1},
+
+    {"q": "sentiment", "state": "Absolutely love this product, it changed how our team works!", "expected": 4},
+    {"q": "sentiment", "state": "It works, nothing special.", "expected": 2},
+    {"q": "sentiment", "state": "Terrible experience. Rude staff and broken product. Never again.", "expected": 0},
+    {"q": "sentiment", "state": "Pretty good overall, a few rough edges.", "expected": 3},
+    {"q": "sentiment", "state": "Disappointed, it stopped working after a week.", "expected": 1},
+    {"q": "sentiment", "state": "The package arrived on Tuesday.", "expected": 2},
+    {"q": "sentiment", "state": "Not bad at all, actually better than I expected.", "expected": 3},
+    {"q": "sentiment", "state": "I can't say I'm happy with the support I got.", "expected": 1},
+
+    {"q": "toxic", "state": "You are a worthless idiot and everyone hates you.", "expected": true},
+    {"q": "toxic", "state": "The update broke my workflow, please fix it.", "expected": false},
+    {"q": "toxic", "state": "If you post that again I will find where you live.", "expected": true},
+    {"q": "toxic", "state": "This movie was so bad it was painful to watch.", "expected": false},
+    {"q": "toxic", "state": "Shut up, nobody asked for your stupid opinion.", "expected": true},
+    {"q": "toxic", "state": "I strongly disagree with your argument, here's why.", "expected": false},
+    {"q": "toxic", "state": "That referee is blind, what a terrible call.", "expected": false},
+    {"q": "toxic", "state": "Go back to where you came from, your kind isn't welcome here.", "expected": true},
+
+    {"q": "spam", "state": "Congratulations! You've won a $1000 gift card. Click here to claim now!", "expected": true},
+    {"q": "spam", "state": "Hi team, attaching the notes from today's meeting.", "expected": false},
+    {"q": "spam", "state": "Your account has been suspended. Verify your password at secure-login-bank.co to restore access.", "expected": true},
+    {"q": "spam", "state": "Can we move our call to 3pm tomorrow?", "expected": false},
+    {"q": "spam", "state": "Earn $5,000 a week from home with this one weird trick. DM me.", "expected": true},
+    {"q": "spam", "state": "Your order #4521 has shipped and will arrive Thursday.", "expected": false},
+    {"q": "spam", "state": "Buy cheap followers and likes, 10k for $5, best price guaranteed!!!", "expected": true},
+    {"q": "spam", "state": "Reminder: the office is closed on Friday for the holiday.", "expected": false},
+
+    {"q": "intent", "state": "How long does shipping to Canada usually take?", "expected": "question"},
+    {"q": "intent", "state": "Book me a table for two at 8pm tonight.", "expected": "task"},
+    {"q": "intent", "state": "The food arrived cold and half the order was missing.", "expected": "complaint"},
+    {"q": "intent", "state": "Haha you're funny, how's your day going?", "expected": "chitchat"},
+    {"q": "intent", "state": "Please stop sending me these newsletters.", "expected": "cancel"},
+    {"q": "intent", "state": "Send the report to Sarah and cc the finance team.", "expected": "task"},
+    {"q": "intent", "state": "What's the difference between the Pro and Team plans?", "expected": "question"},
+    {"q": "intent", "state": "I want to end my membership at the end of this month.", "expected": "cancel"},
+    {"q": "intent", "state": "Your courier left my parcel in the rain and now it's ruined.", "expected": "complaint"},
+    {"q": "intent", "state": "Good morning! Just saying hi.", "expected": "chitchat"}
+  ]
+}

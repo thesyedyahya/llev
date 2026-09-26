@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.install.log
+.env
+models/*/
+data/
+*.egg-info/
+evals/private/
+bench-*.log
+!models/.gitkeep
