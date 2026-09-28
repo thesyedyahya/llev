@@ -1,11 +1,20 @@
-# LLEV: an open-source Jev alternative
+# LLEV: open-source Jev alternative for self-hosted LLM classification
 
-**Self-hosted "System One" decision engine.** Send any text or JSON plus typed questions, and get back typed
-answers with probabilities and a calibrated confidence score in about 150–500 ms, from a small LLM running on your own hardware.
+[![CI](https://github.com/thesyedyahya/llev/actions/workflows/ci.yml/badge.svg)](https://github.com/thesyedyahya/llev/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
+[![llama.cpp](https://img.shields.io/badge/runs%20on-llama.cpp-orange.svg)](https://github.com/ggml-org/llama.cpp)
+
+**LLEV is a free, self-hosted "System One" decision engine: a local LLM classification API that returns typed
+answers with calibrated confidence in about 150 ms.** Use it for zero-shot text classification, content moderation,
+support ticket triage, AI agent guardrails, sentiment analysis, spam and phishing detection, lead scoring and game NPC
+decisions. It runs on your own Mac, Linux box or GPU with open models (Qwen, Gemma, Llama, Phi) via llama.cpp.
 
 LLEV never generates text. It runs one forward pass and reads the model's next-token distribution over the
-answer labels. That makes it fast, cheap and deterministic enough for real-time loops: support triage,
-content moderation, AI agent guardrails, lead scoring, inbox filtering and game NPCs.
+answer labels. That makes it fast, cheap and private, and its confidence scores are meaningful enough to automate on.
+
+**[Website](https://thesyedyahya.github.io/llev/)** · [Quick start](#quick-start) · [API](#api) ·
+[Benchmarks](#benchmarks) · [Use cases](#use-cases) · [FAQ](#faq)
 
 > Inspired by [TypeSafe AI's Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev): same
 > Choice / Score / Noul question model, plus a `/v1/systemone` compatibility path. LLEV is an independent
@@ -35,6 +44,21 @@ curl localhost:8088/v1/decide -H "Authorization: Bearer $KEY" -H "Content-Type: 
 | **Position-bias correction**: options asked in several orders and averaged | not in public docs | ✓ |
 | Feedback endpoint, decision logs and a dataset export for fine-tuning | not in public docs | ✓ |
 | Cost | per token | your hardware |
+
+## Use cases
+
+| Use case | Example questions | Question types |
+|---|---|---|
+| **Support ticket triage** | Which team? How urgent? Is the customer about to churn? | choice, score, noul |
+| **Content moderation** | Is it a threat? Harassment? Hate speech? Spam? | noul, multi (`tier: accurate`) |
+| **AI agent guardrails** | Is this tool call destructive? Does it target production? Does it match the goal? | noul, decided in code |
+| **Sentiment analysis** | How positive is this review, from 1 to 5? | score |
+| **Spam and phishing detection** | Is this email a phishing attempt? Which folder does it go in? | noul, choice |
+| **Lead scoring and routing** | Large deal? Wants a meeting? Decision-maker? | noul, multi |
+| **Intent classification** | Question, task, complaint, cancellation? | choice |
+| **Game NPCs and simulations** | How does the NPC react? What's its mood? | choice, score |
+
+Six of these have ready-made presets in the [playground](#quick-start): support, moderation, guardrails, leads, NPCs and phishing.
 
 ## Quick start
 
@@ -178,6 +202,44 @@ Server CPUs are several times slower than Metal. Benchmark with `--gpu-layers 0`
 - **Unfiltered nearest-neighbour voting** from feedback also hurt. LLEV only lets near-duplicates vote (TF-IDF similarity ≥ `LLEV_KNN_MIN_SIM`).
 - **Generic embeddings (bge-m3)** were no better than TF-IDF at finding same-label examples. They measure topic, not the decision.
 - **Low-resource languages and slang** are weak spots for 1–4B models. Test yours before trusting it.
+
+## FAQ
+
+### What is LLEV?
+LLEV is an open-source, self-hosted decision engine. You send text or JSON plus typed questions (multiple choice,
+a score on a scale, yes/no, or multi-label), and a small local LLM returns typed answers with probabilities and a calibrated
+confidence score. It's built for high-volume, real-time classification where calling a large hosted LLM would be too slow,
+too expensive or not private enough.
+
+### Is there an open-source alternative to TypeSafe AI's Jev?
+Yes, LLEV. It follows the same "System One model" idea (typed questions in, typed answers with confidence out) and accepts
+requests on a `/v1/systemone` path, but it runs entirely on your own hardware with open models. It is an independent project
+and is not affiliated with TypeSafe AI.
+
+### How do I run LLM text classification locally?
+Install LLEV, download a model (`python scripts/download_model.py qwen3-1.7b`), start the server with `python -m llev`
+and POST your text and labels to `/v1/decide`. No GPU is required, though Apple Silicon (Metal) and NVIDIA (CUDA) are much faster.
+
+### How is this different from JSON mode or structured outputs?
+Structured outputs make a generative LLM *write* JSON token by token. LLEV doesn't generate anything. It reads the
+probability of each label in a single forward pass, so you get a real probability distribution rather than one
+sampled answer. It's also faster, and you can gate automation on the confidence.
+
+### How is it different from zero-shot classifiers like BART-MNLI?
+NLI-based zero-shot classifiers score each label separately with a small encoder model. LLEV uses an instruction-tuned LLM
+that reads your instructions and option descriptions, supports ordered scales and multi-label questions, corrects option-order
+bias and can escalate unsure answers to a bigger model.
+
+### Which model should I use?
+On the bundled English benchmark, Gemma 3 4B scored 93% with the best calibration. A Qwen3 1.7B → Gemma 3 4B cascade scored
+89% at half the latency. Benchmark on your own data with `scripts/bench.py`.
+
+### Can I use it for AI agent guardrails?
+Yes. Ask atomic questions about a proposed tool call ("is it destructive?", "does it target production?") and make the
+decision in code. See [Use it well](#use-it-well-atomic-questions-decisions-in-code) and the guardrail preset in the playground.
+
+### Is it free?
+Yes. It's Apache-2.0 licensed, and you only pay for your own hardware.
 
 ## Configuration
 
